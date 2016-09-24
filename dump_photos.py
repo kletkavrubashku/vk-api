@@ -17,7 +17,7 @@ def collect_links(links_out, message):
     for str in ['body', 'text', 'url', 'description']:
         if str in message:
             links_out += _parse_links(message[str])
-    if 'type' in message:
+    if 'type' in message and message['type'] != 'audio':
         collect_links(links_out, message[message['type']])
 
 

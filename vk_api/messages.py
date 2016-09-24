@@ -21,5 +21,6 @@ def process_attachments(item, callback, *, fwd_messages=False):
         if 'attachments' in item:
             for att_item in item['attachments']:
                 callback(att_item)
+                _process_attachment(att_item[att_item['type']])
 
     process_item(item, _process_attachment, fwd_messages=fwd_messages)
