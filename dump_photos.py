@@ -12,11 +12,26 @@ def json_to_str(obj):
 
 def collect_links(links_out, message):
     def _parse_links(str):
+        str = re.sub(r'<.*>', ' ', str)
         return re.findall(r'\S+\w\.[a-zA-Zа-яёА-ЯЁ]\S+', str)
 
-    for str in ['body', 'text', 'url', 'description']:
+    for str in ['url', 'body', 'text', 'description']:
         if str in message:
-            links_out += _parse_links(message[str])
+            links = _parse_links(message[str])
+            if not links:
+                continue
+            owner_id = None
+            for id_str in ['owner_id', 'copy_owner_id', 'from_id', 'uid']:
+                if id_str in message:
+                    owner_id = message[id_str]
+            date = message.get('date', None)
+            if (not owner_id or not date) and str != 'url':
+                print('WARNING: message has not owner_id or date information: ', json_to_str(message))
+            links_out.append({
+                'owner_id': owner_id,
+                'links': links,
+                'created':  date
+            })
     if 'type' in message and message['type'] != 'audio':
         collect_links(links_out, message[message['type']])
 
@@ -26,7 +41,11 @@ def collect_photos(photos_out, message):
         return
     for src in ['src_xxxbig', 'src_xxbig', 'src_xbig', 'src_big', 'src', 'src_small']:
         if src in message['photo']:
-            photos_out.append(message['photo'][src])
+            photos_out.append({
+                'owner_id': message['photo']['owner_id'],
+                'src': message['photo'][src],
+                'created':  message['photo']['created']
+            })
             return
 
 
@@ -45,9 +64,8 @@ def main():
         vk_api.messages.process_item(item, functools.partial(collect_links, links), fwd_messages=True)
         vk_api.messages.process_attachments(item, functools.partial(collect_links, links), fwd_messages=True)
         vk_api.messages.process_attachments(item, functools.partial(collect_photos, photos), fwd_messages=True)
-        print(json_to_str(item))
-    print(links)
-    print(photos)
+    print(json_to_str(links))
+    print(json_to_str(photos))
 
 
 if __name__ == "__main__":
