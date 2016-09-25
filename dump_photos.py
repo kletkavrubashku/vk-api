@@ -7,7 +7,7 @@ import vk_api.messages
 
 
 def json_to_str(obj):
-    return json.dumps(obj, ensure_ascii=False, indent=4, sort_keys=True)
+    return json.dumps(obj, ensure_ascii=False, indent=4)
 
 
 def collect_links(links_out, message):
@@ -58,14 +58,45 @@ def main():
 
     client = vk_api.Client(app_id, app_secret_key, ['messages', 'photos'])
 
-    links = []
-    photos = []
+    data_arr = []
     for item in client.get_messages():
+        links, photos = [], []
         vk_api.messages.process_item(item, functools.partial(collect_links, links), fwd_messages=True)
         vk_api.messages.process_attachments(item, functools.partial(collect_links, links), fwd_messages=True)
         vk_api.messages.process_attachments(item, functools.partial(collect_photos, photos), fwd_messages=True)
-    print(json_to_str(links))
-    print(json_to_str(photos))
+        if links or photos:
+            data_arr.append({
+                'date': item['date'],
+                'uid': item['uid'],
+                'links': links,
+                'photos': photos
+            })
+
+    data_dict = {}
+    for item in data_arr:
+        for link_item in item['links']:
+            data_dict_link_items = []
+            for link in link_item['links']:
+                data_dict_link_items.append({
+                    'link': link,
+                    'created': link_item['created']
+                })
+            uid = item['uid']
+            owner_id = link_item['owner_id'] if link_item['owner_id'] else 'unknown'
+
+            data_dict.setdefault(uid, {}).setdefault(owner_id, []).extend(data_dict_link_items)
+
+        for photo_item in item['photos']:
+            data_dict_photo_item = {
+                'src': photo_item['src'],
+                'created': photo_item['created']
+            }
+            uid = item['uid']
+            owner_id = photo_item['owner_id']
+
+            data_dict.setdefault(uid, {}).setdefault(owner_id, []).append(data_dict_photo_item)
+
+    print(json_to_str(data_dict))
 
 
 if __name__ == "__main__":
