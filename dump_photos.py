@@ -1,4 +1,5 @@
 import configparser
+import datetime
 import functools
 import json
 import re
@@ -24,13 +25,13 @@ def collect_links(links_out, message):
             for id_str in ['owner_id', 'copy_owner_id', 'from_id', 'uid']:
                 if id_str in message:
                     owner_id = message[id_str]
-            date = message.get('date', None)
+            date = message.get('date', message.get('created', None))
             if (not owner_id or not date) and str != 'url':
                 print('WARNING: message has not owner_id or date information: ', json_to_str(message))
             links_out.append({
                 'owner_id': owner_id,
                 'links': links,
-                'created':  date
+                'date':  date
             })
     if 'type' in message and message['type'] != 'audio':
         collect_links(links_out, message[message['type']])
@@ -44,9 +45,20 @@ def collect_photos(photos_out, message):
             photos_out.append({
                 'owner_id': message['photo']['owner_id'],
                 'src': message['photo'][src],
-                'created':  message['photo']['created']
+                'date':  message['photo']['created']
             })
             return
+
+
+def uid_to_name(client, uid):
+    if not isinstance(uid, int):
+        return uid
+    if uid > 0:
+        user = client.get_users(user_ids=[uid], caching=True)[0]
+        return '{} {}'.format(user['first_name'], user['last_name'])
+    else:
+        group = client.get_groups(group_ids=[-uid], caching=True)[0]
+        return group['name']
 
 
 def main():
@@ -79,23 +91,22 @@ def main():
             for link in link_item['links']:
                 data_dict_link_items.append({
                     'link': link,
-                    'created': link_item['created']
+                    'date': datetime.datetime.fromtimestamp(link_item['date']).strftime('%Y-%m-%d %H:%M:%S') if link_item['date'] else None
                 })
-            uid = item['uid']
-            owner_id = link_item['owner_id'] if link_item['owner_id'] else 'unknown'
+            u_name = uid_to_name(client, item['uid'])
+            owner_name = uid_to_name(client, link_item['owner_id'] if link_item['owner_id'] else 'unknown')
 
-            data_dict.setdefault(uid, {}).setdefault(owner_id, []).extend(data_dict_link_items)
+            data_dict.setdefault(u_name, {}).setdefault(owner_name, []).extend(data_dict_link_items)
 
         for photo_item in item['photos']:
             data_dict_photo_item = {
                 'src': photo_item['src'],
-                'created': photo_item['created']
+                'name': datetime.datetime.fromtimestamp(photo_item['date']).strftime('IMG_%Y%m%d_%H%M%S.jpg')
             }
-            uid = item['uid']
-            owner_id = photo_item['owner_id']
+            u_name = uid_to_name(client, item['uid'])
+            owner_name = uid_to_name(client, photo_item['owner_id'])
 
-            data_dict.setdefault(uid, {}).setdefault(owner_id, []).append(data_dict_photo_item)
-
+            data_dict.setdefault(u_name, {}).setdefault(owner_name, []).append(data_dict_photo_item)
     print(json_to_str(data_dict))
 
 

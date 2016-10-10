@@ -1,6 +1,7 @@
 from oauthlib.oauth2.rfc6749.clients import WebApplicationClient
 from requests_oauthlib import OAuth2Session
 from configparser import ConfigParser
+import time
 
 _AUTH_URL = 'https://oauth.vk.com/authorize'
 _TOKEN_URL = 'https://oauth.vk.com/access_token'
@@ -60,6 +61,9 @@ class Session:
             code = error['error_code']
             if code is 5:
                 self._ensure_access_token()
+                return self.get(method, **kwargs)
+            if code is 6:
+                time.sleep(0.1)
                 return self.get(method, **kwargs)
             raise SessionException(code, error['error_msg'])
         else:
