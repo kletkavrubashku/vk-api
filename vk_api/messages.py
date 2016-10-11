@@ -2,11 +2,14 @@ class Messages:
     def __init__(self, session, **kwargs):
         params = {'count': 200}
         params.update(kwargs)
-        response = session.get('messages.get', params=params)
-        self._data = response['response'][1:]
+        self._response = session.get('messages.get', params=params)['response']
+        self._data = self._response[1:]
 
     def __iter__(self):
         return iter(self._data)
+
+    def __len__(self):
+        return self._response[0]
 
 
 def process_item(item, callback, *, fwd_messages=False):
