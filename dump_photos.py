@@ -39,20 +39,22 @@ def collect_links(links_out, message):
                 'date':  date
             })
     if 'type' in message and message['type'] != 'audio':
+        if message['type'] == 'photos_list':
+            message['type'] = 'photo_list'
         collect_links(links_out, message[message['type']])
 
 
 def collect_photos(photos_out, message):
-    if 'photo' not in message:
-        return
-    for src in ['src_xxxbig', 'src_xxbig', 'src_xbig', 'src_big', 'src', 'src_small']:
-        if src in message['photo']:
-            photos_out.append({
-                'owner_id': message['photo']['owner_id'],
-                'src': message['photo'][src],
-                'date':  message['photo']['created']
-            })
-            return
+    for type in ['photo', 'photo_list']:
+        if type not in message:
+            continue
+        for src in ['src_xxxbig', 'src_xxbig', 'src_xbig', 'src_big', 'src', 'src_small']:
+            if src in message[type]:
+                photos_out.append({
+                    'owner_id': message[type]['owner_id'],
+                    'src': message[type][src],
+                    'date':  message[type]['created']
+                })
 
 
 def uid_to_name(client, uid):
@@ -134,6 +136,7 @@ def main():
         if not os.path.exists(dir):
             os.makedirs(dir)
         for key1, value1 in value.items():
+            print('\t\t{}'.format(key1))
             dir1 = os.path.join(dir, key1)
             if not os.path.exists(dir1):
                 os.makedirs(dir1)

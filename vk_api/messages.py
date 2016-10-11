@@ -1,15 +1,41 @@
 class Messages:
     def __init__(self, session, **kwargs):
-        params = {'count': 200}
-        params.update(kwargs)
-        self._response = session.get('messages.get', params=params)['response']
+        if 'count' in kwargs:
+            self._manual = True
+        else:
+            self._manual = False
+            kwargs['count'] = 200
+        kwargs['offset'] = kwargs['offset'] if 'offset' in kwargs else 0
+
+        self._params = kwargs
+        self._session = session
+
+        self._response = self._session.get('messages.get', params=self._params)['response']
         self._data = self._response[1:]
 
     def __iter__(self):
-        return iter(self._data)
+        offset = self._params['offset'] + self._params['count']
+        while True:
+            for i in self._data:
+                yield i
+
+            if self._manual:
+                break
+
+            params = {'offset': offset}
+            params.update(self._params)
+            self._response = self._session.get('messages.get', params=params)['response']
+            self._data = self._response[1:]
+
+            if not self._data:
+                break
+
+            offset += self._params['count']
 
     def __len__(self):
-        return self._response[0]
+        if self._manual:
+            return self._params['count']
+        return self._response[0] - self._params['offset']
 
 
 def process_item(item, callback, *, fwd_messages=False):
