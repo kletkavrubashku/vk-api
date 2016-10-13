@@ -1,4 +1,4 @@
-MAX_COUNT = 500
+MAX_COUNT = 250
 
 
 class Groups:

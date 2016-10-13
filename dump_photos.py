@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import urllib.error
 import urllib.request
 import vk_api
 import vk_api.messages
@@ -69,14 +70,14 @@ def main():
     client = vk_api.Client(app_id, app_secret_key, ['messages', 'photos'])
 
     data_arr = []
-    for out in [0]:
+    for out in [0, 1]:
         if out == 0:
             print('Get inbox messages...')
         else:
             print('Get outbox messages...')
         messages = client.get_messages(out=out)
         for n, item in enumerate(messages):
-            if n % 100 == 0:
+            if n % 1000 == 0:
                 print('\t{} from {}'.format(n, len(messages)))
 
             links, photos = [], []
@@ -119,23 +120,17 @@ def main():
     uid_to_name = {}
     print('Resolve user names...')
     users = client.get_users(user_ids=users)
-    for n, u in enumerate(users):
-        if n % 100 == 0:
-            print('\t{} from {}'.format(n, len(users)))
-        uid_to_name[u['uid']] = '{} {}'.format(u['first_name'], u['last_name'])
+    for u in users:
+        uid_to_name[u['uid']] = re.sub('[^a-zA-Zа-яёА-ЯЁ0-9 ]', '', '{} {}'.format(u['first_name'], u['last_name']))
 
     print('Resolve group names...')
     groups = client.get_groups(group_ids=groups)
-    for n, g in enumerate(groups):
-        if n % 100 == 0:
-            print('\t{} from {}'.format(n, len(groups)))
-        uid_to_name[-g['gid']] = g['name']
+    for g in groups:
+        uid_to_name[-g['gid']] = re.sub('[^a-zA-Zа-яёА-ЯЁ0-9 ]', '', g['name'])
 
     print('Restructure data...')
     data_dict = {}
-    for n, item in enumerate(data_arr):
-        if n % 100 == 0:
-            print('\t{} from {}'.format(n, len(data_arr)))
+    for item in data_arr:
         for link_item in item['links']:
             data_dict_link_items = []
             for link in link_item['links']:
@@ -179,13 +174,16 @@ def main():
                         print("\t\t\tWARNING: '{}' already exist".format(f_name))
                         name_arr = f_name.split('.')
                         f_name = '{}0.{}'.format(name_arr[0], name_arr[1])
-
-                    urllib.request.urlretrieve(i['src'], os.path.join(dir1, f_name))
+                    try:
+                        urllib.request.urlretrieve(i['src'], os.path.join(dir1, f_name))
+                    except urllib.error.HTTPError as e:
+                        print("\t\t\tERROR: '{}' - code {}".format(i['src'], e.code))
                 else:
                     links.append('{0} <a href="{1}">{1}</a>'.format(i['date'], i['link']))
             if links:
                 links.sort()
                 with open(os.path.join(dir1, LINKS_FILE_NAME), 'w') as f:
+                    f.write('<meta charset="utf-8">')
                     f.write('<br>'.join(links))
 
 if __name__ == '__main__':

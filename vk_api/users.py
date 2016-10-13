@@ -1,4 +1,4 @@
-MAX_COUNT = 1000
+MAX_COUNT = 250
 
 
 class Users:
