@@ -1,11 +1,18 @@
+MAX_COUNT = 200
+
+
 class Messages:
     def __init__(self, session, **kwargs):
         if 'count' in kwargs:
-            self._manual = True
+            self._limit = kwargs['count']
+            kwargs['count'] = min(kwargs['count'], MAX_COUNT)
         else:
-            self._manual = False
-            kwargs['count'] = 200
-        kwargs['offset'] = kwargs['offset'] if 'offset' in kwargs else 0
+            kwargs['count'] = MAX_COUNT
+
+        if 'offset' in kwargs:
+            self._offset = kwargs['offset']
+        else:
+            kwargs['offset'] = 0
 
         self._params = kwargs
         self._session = session
@@ -14,28 +21,28 @@ class Messages:
         self._data = self._response[1:]
 
     def __iter__(self):
-        offset = self._params['offset'] + self._params['count']
         while True:
             for i in self._data:
                 yield i
 
-            if self._manual:
-                break
+            self._params['offset'] += self._params['count']
+            if hasattr(self, '_limit'):
+                self._params['count'] = min(self._limit - self._params['offset'], MAX_COUNT)
+                if self._params['count'] == 0:
+                    break
+            else:
+                self._params['count'] = MAX_COUNT
 
-            params = {'offset': offset}
-            params.update(self._params)
-            self._response = self._session.get('messages.get', params=params)['response']
+            self._response = self._session.get('messages.get', params=self._params)['response']
             self._data = self._response[1:]
 
             if not self._data:
                 break
 
-            offset += self._params['count']
-
     def __len__(self):
-        if self._manual:
-            return self._params['count']
-        return self._response[0] - self._params['offset']
+        init_offset = self._offset if hasattr(self, '_offset') else 0
+        init_count = self._limit if hasattr(self, '_limit') else self._response[0]
+        return init_count - init_offset
 
 
 def process_item(item, callback, *, fwd_messages=False):

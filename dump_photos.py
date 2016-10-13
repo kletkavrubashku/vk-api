@@ -4,6 +4,7 @@ import functools
 import json
 import os
 import re
+import shutil
 import urllib.request
 import vk_api
 import vk_api.messages
@@ -55,17 +56,7 @@ def collect_photos(photos_out, message):
                     'src': message[type][src],
                     'date':  message[type]['created']
                 })
-
-
-def uid_to_name(client, uid):
-    if not isinstance(uid, int):
-        return uid
-    if uid > 0:
-        user = client.get_users(user_ids=[uid], caching=True)[0]
-        return '{} {}'.format(user['first_name'], user['last_name'])
-    else:
-        group = client.get_groups(group_ids=[-uid], caching=True)[0]
-        return group['name']
+                break
 
 
 def main():
@@ -100,10 +91,50 @@ def main():
                     'photos': photos
                 })
 
-    print('Resolve names...')
+    print('Collect uids...')
+    users = []
+    groups = []
+    for item in data_arr:
+        if not isinstance(item['uid'], int):
+            continue
+        if item['uid'] > 0:
+            users.append(item['uid'])
+        else:
+            groups.append(-item['uid'])
+        for link_item in item['links']:
+            if not isinstance(link_item['owner_id'], int):
+                continue
+            if link_item['owner_id'] > 0:
+                users.append(link_item['owner_id'])
+            else:
+                groups.append(-link_item['owner_id'])
+        for photo_item in item['photos']:
+            if not isinstance(photo_item['owner_id'], int):
+                continue
+            if photo_item['owner_id'] > 0:
+                users.append(photo_item['owner_id'])
+            else:
+                groups.append(-photo_item['owner_id'])
+
+    uid_to_name = {}
+    print('Resolve user names...')
+    users = client.get_users(user_ids=users)
+    for n, u in enumerate(users):
+        if n % 100 == 0:
+            print('\t{} from {}'.format(n, len(users)))
+        uid_to_name[u['uid']] = '{} {}'.format(u['first_name'], u['last_name'])
+
+    print('Resolve group names...')
+    groups = client.get_groups(group_ids=groups)
+    for n, g in enumerate(groups):
+        if n % 100 == 0:
+            print('\t{} from {}'.format(n, len(groups)))
+        uid_to_name[-g['gid']] = g['name']
+
+    print('Restructure data...')
     data_dict = {}
     for n, item in enumerate(data_arr):
-        if n % 20 == 0:
+        if n % 100 == 0:
             print('\t{} from {}'.format(n, len(data_arr)))
         for link_item in item['links']:
             data_dict_link_items = []
@@ -112,8 +143,8 @@ def main():
                     'link': link,
                     'date': datetime.datetime.fromtimestamp(link_item['date']).strftime('%Y-%m-%d %H:%M:%S') if link_item['date'] else None
                 })
-            u_name = '{} ({})'.format(uid_to_name(client, item['uid']), item['uid'])
-            owner_name = '{} ({})'.format(uid_to_name(client, link_item['owner_id']), link_item['owner_id'])
+            u_name = '{} ({})'.format(uid_to_name.get(item['uid'], item['uid']), item['uid'])
+            owner_name = '{} ({})'.format(uid_to_name.get(link_item['owner_id'], link_item['owner_id']), link_item['owner_id'])
 
             data_dict.setdefault(u_name, {}).setdefault(owner_name, []).extend(data_dict_link_items)
 
@@ -122,14 +153,14 @@ def main():
                 'src': photo_item['src'],
                 'name': datetime.datetime.fromtimestamp(photo_item['date']).strftime('IMG_%Y%m%d_%H%M%S.jpg')
             }
-            u_name = '{} ({})'.format(uid_to_name(client, item['uid']), item['uid'])
-            owner_name =  '{} ({})'.format(uid_to_name(client, photo_item['owner_id']), photo_item['owner_id'])
+            u_name = '{} ({})'.format(uid_to_name.get(item['uid'], item['uid']), item['uid'])
+            owner_name =  '{} ({})'.format(uid_to_name.get(photo_item['owner_id'], photo_item['owner_id']), photo_item['owner_id'])
 
             data_dict.setdefault(u_name, {}).setdefault(owner_name, []).append(data_dict_photo_item)
 
     print('Save files...')
-    if not os.path.exists(OUTPUT_DIR_NAME):
-        os.makedirs(OUTPUT_DIR_NAME)
+    shutil.rmtree(OUTPUT_DIR_NAME, ignore_errors=True)
+    os.makedirs(OUTPUT_DIR_NAME)
     for key, value in data_dict.items():
         print('\t{}'.format(key))
         dir = os.path.join(OUTPUT_DIR_NAME, key)
@@ -143,7 +174,13 @@ def main():
             links = []
             for i in value1:
                 if 'src' in i:
-                    urllib.request.urlretrieve(i['src'], os.path.join(dir1, i['name']))
+                    f_name = i['name']
+                    while os.path.exists(os.path.join(dir1, f_name)) is True:
+                        print("\t\t\tWARNING: '{}' already exist".format(f_name))
+                        name_arr = f_name.split('.')
+                        f_name = '{}0.{}'.format(name_arr[0], name_arr[1])
+
+                    urllib.request.urlretrieve(i['src'], os.path.join(dir1, f_name))
                 else:
                     links.append('{0} <a href="{1}">{1}</a>'.format(i['date'], i['link']))
             if links:
