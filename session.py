@@ -1,17 +1,23 @@
 from oauthlib.oauth2.rfc6749.clients import WebApplicationClient
 from requests_oauthlib import OAuth2Session
 from configparser import ConfigParser
+from os import path
+import tempfile
 import time
 
 _AUTH_URL = 'https://oauth.vk.com/authorize'
 _TOKEN_URL = 'https://oauth.vk.com/access_token'
 _METHOD_URL = 'https://api.vk.com/method'
-_ACCESS_TOKEN_CACHE_FN = 'access_token.cache'
+_ACCESS_TOKEN_CACHE_FN = 'vkapi_access_token.cache'
+
+
+def _get_access_token_file_path():
+    return path.join(tempfile.gettempdir(), _ACCESS_TOKEN_CACHE_FN)
 
 
 def _read_cached_access_token():
     config = ConfigParser()
-    config.read(_ACCESS_TOKEN_CACHE_FN)
+    config.read(_get_access_token_file_path())
     return config.get('session', 'access_token') if config.has_section('session') else None
 
 
@@ -19,7 +25,7 @@ def _write_cached_access_token(value):
     config = ConfigParser()
     config.add_section('session')
     config.set('session', 'access_token', value)
-    config_file = open(_ACCESS_TOKEN_CACHE_FN, 'w')
+    config_file = open(_get_access_token_file_path(), 'w')
     config.write(config_file)
     config_file.close()
 
